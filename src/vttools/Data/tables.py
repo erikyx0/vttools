@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Literal
 
 import pandas as pd
 
 FormatSpec = int | str | tuple[str, int] | Literal["raw"]
+RuleName = Literal["toprule", "midrule", "bottomrule"]
 
 
 def df_to_table(
@@ -15,6 +17,7 @@ def df_to_table(
     delimiter: str = " & ",
     decimal_sep: str = ".",
     latex: bool = True,
+    latex_rules: list[tuple[int, RuleName]] | None = None,
 ) -> str:
     """
     Erstellt LaTeX- oder CSV-ähnliche Tabellen aus einem DataFrame.
@@ -39,6 +42,20 @@ def df_to_table(
         Dezimaltrennzeichen, ``"."`` oder ``,``.
     latex:
         Falls ``True``, wird eine vollständige ``tabular``-Umgebung erzeugt.
+    latex_rules:
+        Optionales Regel-Array zur präzisen Platzierung von ``\\toprule``,
+        ``\\midrule`` und ``\\bottomrule``. Jeder Eintrag ist ein Tupel
+        ``(position, regelname)``.
+
+        Positionsschema:
+        - ``0``: direkt nach ``\\begin{tabular}``, vor der Kopfzeile
+        - ``1``: direkt nach der Kopfzeile
+        - ``2``: nach der ersten Datenzeile
+        - ...
+        - ``n + 1``: nach der ``n``-ten Datenzeile
+
+        Mehrfachvorkommen sind erlaubt. Wenn ``None``, wird das bisherige
+        Standardverhalten mit ``\\hline`` verwendet.
 
     Returns
     -------
@@ -49,14 +66,8 @@ def df_to_table(
         raise ValueError("columns und rounding müssen gleich lang sein.")
 
     header = delimiter.join(columns)
-    lines: list[str]
-    if latex:
-        header += r" \\ \hline"
-        colspec = " | ".join("c" for _ in columns)
-        lines = [rf"\begin{{tabular}}{{{colspec}}}", r"\hline", header]
-        tail = [r"\hline", r"\end{tabular}"]
-    else:
-        lines, tail = [header], []
+    lines: list[str] = []
+    table_rows: list[str] = []
 
     def fmt(value: object, spec: FormatSpec) -> str:
         if pd.isnull(value):
@@ -87,8 +98,46 @@ def df_to_table(
 
     for _, row in df.iterrows():
         cells = [fmt(row[col], spec) for col, spec in zip(columns, rounding)]
-        line = delimiter.join(cells) + (r" \\" if latex else "")
-        lines.append(line)
+        table_rows.append(delimiter.join(cells))
 
-    lines.extend(tail)
+    if latex:
+        colspec = " | ".join("c" for _ in columns)
+        lines = [rf"\begin{{tabular}}{{{colspec}}}"]
+
+        if latex_rules is None:
+            lines.extend([r"\hline", f"{header} \\ \hline"])
+            lines.extend([f"{row} \\" for row in table_rows])
+            lines.extend([r"\hline", r"\end{tabular}"])
+            return "\n".join(lines)
+
+        valid_rules: dict[str, str] = {
+            "toprule": r"\toprule",
+            "midrule": r"\midrule",
+            "bottomrule": r"\bottomrule",
+        }
+        max_pos = len(table_rows) + 1
+        rules_by_pos: dict[int, list[str]] = defaultdict(list)
+        for pos, rule in latex_rules:
+            if pos < 0 or pos > max_pos:
+                raise ValueError(
+                    f"Ungültige rule-Position {pos}. Erlaubt sind Werte von 0 bis {max_pos}."
+                )
+            if rule not in valid_rules:
+                raise ValueError(
+                    "Ungültiger Regelnamen. Erlaubt: 'toprule', 'midrule', 'bottomrule'."
+                )
+            rules_by_pos[pos].append(valid_rules[rule])
+
+        lines.extend(rules_by_pos.get(0, []))
+        lines.append(f"{header} \\")
+        lines.extend(rules_by_pos.get(1, []))
+
+        for idx, row in enumerate(table_rows, start=1):
+            lines.append(f"{row} \\")
+            lines.extend(rules_by_pos.get(idx + 1, []))
+
+        lines.append(r"\end{tabular}")
+    else:
+        lines = [header, *table_rows]
+
     return "\n".join(lines)
