@@ -105,7 +105,7 @@ def df_to_table(
         lines = [rf"\begin{{tabular}}{{{colspec}}}"]
 
         if latex_rules is None:
-            lines.extend([r"\hline", f"{header} \\ \hline"])
+            lines.extend([r"\hline", f"{header} \\\\ ", r"\hline"])
             lines.extend([f"{row} \\" for row in table_rows])
             lines.extend([r"\hline", r"\end{tabular}"])
             return "\n".join(lines)
