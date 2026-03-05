@@ -7,6 +7,7 @@ import pandas as pd
 
 FormatSpec = int | str | tuple[str, int] | Literal["raw"]
 RuleName = Literal["toprule", "midrule", "bottomrule"]
+LatexRules = Literal["booktabs"] | list[tuple[int, RuleName]] | None
 
 
 def df_to_table(
@@ -17,7 +18,7 @@ def df_to_table(
     delimiter: str = " & ",
     decimal_sep: str = ".",
     latex: bool = True,
-    latex_rules: list[tuple[int, RuleName]] | None = None,
+    latex_rules: LatexRules = None,
 ) -> str:
     """
     Erstellt LaTeX- oder CSV-ähnliche Tabellen aus einem DataFrame.
@@ -99,6 +100,13 @@ def df_to_table(
     for _, row in df.iterrows():
         cells = [fmt(row[col], spec) for col, spec in zip(columns, rounding)]
         table_rows.append(delimiter.join(cells))
+    if latex and latex_rules == "booktabs":
+        n = len(table_rows)
+        latex_rules = [
+            (0, "toprule"),
+            (1, "midrule"),
+            (n + 1, "bottomrule"),
+        ]
 
     if latex:
         colspec = " | ".join("c" for _ in columns)
