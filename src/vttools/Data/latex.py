@@ -5,6 +5,8 @@ from typing import Literal
 
 import pandas as pd
 
+from pathlib import Path
+
 FormatSpec = int | str | tuple[str, int] | Literal["raw"]
 RuleName = Literal["toprule", "midrule", "bottomrule"]
 LatexRules = Literal["booktabs"] | list[tuple[int, RuleName]] | None
@@ -149,3 +151,9 @@ def df_to_table(
         lines = [header, *table_rows]
 
     return "\n".join(lines)
+
+def write_tex(path: str | Path, content: str, *, encoding: str = "utf-8") -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding=encoding, newline="\n")
+    return path
